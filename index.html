@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>System Logs Interface</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      :root {
+        --bg-color: #020202;
+        --log-color: #00ff6a;
+        --accent-color: #0aff9d;
+        --hidden-log-color: #ff3b3b;
+        --error-color: #ff3b3b;
+        --glitch-color-1: #00fff6;
+        --glitch-color-2: #ff00ff;
+        --font-main: "Consolas", "SF Mono", "Menlo", "Monaco", monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: radial-gradient(circle at top, #101010 0, #000 55%, #000 100%);
+        color: var(--log-color);
+        font-family: var(--font-main);
+        display: flex;
+        align-items: stretch;
+        justify-content: center;
+      }
+
+      .scanline-overlay {
+        pointer-events: none;
+        position: fixed;
+        inset: 0;
+        background-image: linear-gradient(
+          to bottom,
+          rgba(255, 255, 255, 0.04) 1px,
+          transparent 1px
+        );
+        background-size: 100% 3px;
+        mix-blend-mode: soft-light;
+        opacity: 0.25;
+        z-index: 2;
+      }
+
+      .crt-vignette {
+        pointer-events: none;
+        position: fixed;
+        inset: 0;
+        box-shadow: inset 0 0 160px rgba(0, 0, 0, 0.9);
+        z-index: 1;
+      }
+
+      .wrapper {
+        position: relative;
+        z-index: 3;
+        width: 100%;
+        max-width: 960px;
+        padding: 24px 16px 32px;
+        display: flex;
+      }
+
+      .terminal {
+        position: relative;
+        flex: 1;
+        border-radius: 10px;
+        border: 1px solid rgba(0, 255, 106, 0.65);
+        background: radial-gradient(circle at top left, #121212 0, #000000 55%);
+        padding: 16px 18px 12px;
+        box-shadow:
+          0 0 25px rgba(0, 255, 106, 0.2),
+          0 0 60px rgba(0, 255, 106, 0.1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .terminal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        color: rgba(0, 255, 106, 0.8);
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .terminal-lights {
+        display: flex;
+        gap: 6px;
+      }
+
+      .light {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #1b1b1b;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .light::after {
+        content: "";
+        position: absolute;
+        inset: 1px;
+        border-radius: inherit;
+        background: #00ff6a;
+        opacity: 0.2;
+      }
+
+      .light--red::after {
+        background: #ff3b3b;
+      }
+
+      .light--yellow::after {
+        background: #ffd23c;
+      }
+
+      .terminal-title {
+        flex: 1;
+        text-align: center;
+        opacity: 0.8;
+      }
+
+      .terminal-meta {
+        text-align: right;
+        min-width: 90px;
+      }
+
+      .terminal-body {
+        position: relative;
+        flex: 1;
+        border-radius: 6px;
+        border: 1px solid rgba(0, 255, 106, 0.15);
+        padding: 12px 12px 10px;
+        background: radial-gradient(circle at top, #050505 0, #000000 65%);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .logs-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 4px;
+        scrollbar-width: thin;
+        scrollbar-color: rgba(0, 255, 106, 0.4) transparent;
+      }
+
+      .logs-scroll::-webkit-scrollbar {
+        width: 7px;
+      }
+
+      .logs-scroll::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .logs-scroll::-webkit-scrollbar-thumb {
+        background: linear-gradient(
+          to bottom,
+          rgba(0, 255, 106, 0.7),
+          rgba(0, 255, 106, 0.1)
+        );
+        border-radius: 999px;
+      }
+
+      .logs {
+        font-size: 13px;
+        line-height: 1.35;
+        white-space: pre-wrap;
+        word-break: break-word;
+        color: var(--log-color);
+        text-shadow:
+          0 0 2px rgba(0, 255, 106, 0.7),
+          0 0 6px rgba(0, 255, 106, 0.5);
+      }
+
+      .log-line {
+        position: relative;
+        padding-block: 1px;
+      }
+
+      .log-line--muted {
+        opacity: 0.7;
+      }
+
+      .log-line--hidden {
+        color: var(--hidden-log-color);
+        text-shadow:
+          0 0 2px rgba(255, 59, 59, 0.7),
+          0 0 7px rgba(255, 59, 59, 0.45);
+      }
+
+      .bottom-bar {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 11px;
+        color: rgba(0, 255, 106, 0.7);
+      }
+
+      .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: rgba(0, 255, 106, 0.2);
+        box-shadow: 0 0 10px rgba(0, 255, 106, 0.7);
+      }
+
+      .status-dot::after {
+        content: "";
+        display: block;
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        background: #00ff6a;
+        animation: pulse 1.5s ease-in-out infinite;
+      }
+
+      .status-text {
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hidden-logs-section {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        min-height: 30px;
+      }
+
+      .error-message {
+        min-height: 1em;
+        font-size: 11px;
+        color: var(--error-color);
+        opacity: 0;
+        transform: translateY(2px);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+      }
+
+      .error-message--visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .btn-ghost {
+        position: relative;
+        padding: 7px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(0, 255, 106, 0.7);
+        background: radial-gradient(circle at top, rgba(0, 255, 106, 0.09), rgba(0, 0, 0, 0.95));
+        color: var(--log-color);
+        font-family: var(--font-main);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        transition:
+          transform 0.12s ease-out,
+          box-shadow 0.12s ease-out,
+          border-color 0.12s ease-out,
+          background 0.12s ease-out;
+      }
+
+      .btn-ghost::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          120deg,
+          rgba(0, 255, 106, 0),
+          rgba(0, 255, 106, 0.24),
+          rgba(0, 255, 106, 0)
+        );
+        transform: translateX(-120%);
+      }
+
+      .btn-ghost:hover::before {
+        transform: translateX(120%);
+        transition: transform 0.55s ease;
+      }
+
+      .btn-ghost:hover {
+        transform: translateY(-1px);
+        box-shadow:
+          0 0 18px rgba(0, 255, 106, 0.35),
+          0 0 60px rgba(0, 255, 106, 0.2);
+        border-color: rgba(0, 255, 106, 0.95);
+      }
+
+      .btn-ghost:active {
+        transform: translateY(0);
+        box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+      }
+
+      .btn-ghost-icon {
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        border: 1px solid rgba(0, 255, 106, 0.7);
+        box-shadow: 0 0 8px rgba(0, 255, 106, 0.7);
+      }
+
+      .btn-ghost-label {
+        opacity: 0.85;
+      }
+
+      /* Glitch effect */
+      .glitch-shard {
+        position: absolute;
+        background: rgba(0, 255, 106, 0.13);
+        mix-blend-mode: screen;
+        pointer-events: none;
+        z-index: 8;
+        overflow: hidden;
+      }
+
+      .glitch-shard::before,
+      .glitch-shard::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        mix-blend-mode: screen;
+      }
+
+      .glitch-shard::before {
+        background: linear-gradient(
+          to right,
+          transparent 0%,
+          rgba(0, 255, 106, 0.45) 30%,
+          rgba(0, 255, 106, 0.9) 50%,
+          rgba(0, 255, 106, 0.32) 70%,
+          transparent 100%
+        );
+        transform: translateX(-10%);
+      }
+
+      .glitch-shard::after {
+        background: linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0.1),
+          rgba(0, 255, 106, 0.4),
+          rgba(0, 0, 0, 0.1)
+        );
+        opacity: 0.8;
+      }
+
+      .glitch-animate {
+        animation:
+          glitchShift 260ms steps(2, end) alternate-reverse,
+          glitchOpacity 260ms ease-out forwards;
+      }
+
+      .glitch-channel {
+        position: absolute;
+        inset: 0;
+        mix-blend-mode: screen;
+        pointer-events: none;
+      }
+
+      .glitch-channel--red {
+        border: 1px solid rgba(255, 0, 90, 0.7);
+        filter: drop-shadow(-2px 0 6px rgba(255, 0, 90, 0.7));
+        animation: channelRed 240ms steps(2, end) alternate;
+      }
+
+      .glitch-channel--cyan {
+        border: 1px solid rgba(0, 255, 255, 0.7);
+        filter: drop-shadow(3px 0 6px rgba(0, 255, 255, 0.7));
+        animation: channelCyan 240ms steps(2, end) alternate;
+      }
+
+      /* Username prompt styles */
+      dialog::backdrop {
+        background: radial-gradient(circle at top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.95));
+      }
+
+      dialog {
+        border-radius: 10px;
+        border: 1px solid rgba(0, 255, 106, 0.75);
+        background: radial-gradient(circle at top, #050505 0, #000 75%);
+        color: var(--log-color);
+        padding: 18px 18px 14px;
+        width: min(420px, 92vw);
+        box-shadow:
+          0 0 24px rgba(0, 255, 106, 0.3),
+          0 0 60px rgba(0, 255, 106, 0.22);
+        font-family: var(--font-main);
+      }
+
+      .prompt-title {
+        font-size: 13px;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        color: rgba(0, 255, 106, 0.9);
+      }
+
+      .prompt-body {
+        font-size: 12px;
+        margin-bottom: 14px;
+        color: rgba(0, 255, 106, 0.9);
+      }
+
+      .prompt-input-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .prompt-label {
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(0, 255, 106, 0.75);
+      }
+
+      .prompt-input {
+        flex: 1;
+        border-radius: 999px;
+        border: 1px solid rgba(0, 255, 106, 0.7);
+        background: rgba(0, 0, 0, 0.85);
+        color: var(--log-color);
+        padding: 6px 10px 6px;
+        font-family: var(--font-main);
+        font-size: 12px;
+        outline: none;
+        box-shadow: 0 0 0 1px rgba(0, 255, 106, 0.2);
+      }
+
+      .prompt-input::placeholder {
+        color: rgba(0, 255, 106, 0.4);
+      }
+
+      .prompt-input:focus-visible {
+        border-color: rgba(0, 255, 106, 1);
+        box-shadow:
+          0 0 0 1px rgba(0, 255, 106, 0.6),
+          0 0 15px rgba(0, 255, 106, 0.65);
+      }
+
+      .prompt-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 11px;
+      }
+
+      .prompt-error {
+        min-height: 1em;
+        color: var(--error-color);
+        opacity: 0;
+        transform: translateY(2px);
+        transition: opacity 0.22s ease, transform 0.22s ease;
+      }
+
+      .prompt-error--visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .prompt-actions {
+        display: flex;
+        gap: 8px;
+      }
+
+      .btn-secondary {
+        border-radius: 999px;
+        border: 1px solid rgba(0, 255, 106, 0.4);
+        padding: 5px 11px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(0, 0, 0, 0.75);
+        color: rgba(0, 255, 106, 0.85);
+        cursor: pointer;
+      }
+
+      .btn-secondary:hover {
+        border-color: rgba(0, 255, 106, 0.85);
+      }
+
+      .btn-primary {
+        border-radius: 999px;
+        border: 1px solid rgba(0, 255, 106, 0.9);
+        padding: 5px 13px;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: radial-gradient(circle at top, rgba(0, 255, 106, 0.25), rgba(0, 0, 0, 0.95));
+        color: var(--log-color);
+        cursor: pointer;
+        box-shadow:
+          0 0 18px rgba(0, 255, 106, 0.4),
+          0 0 50px rgba(0, 255, 106, 0.2);
+      }
+
+      .btn-primary:hover {
+        box-shadow:
+          0 0 26px rgba(0, 255, 106, 0.55),
+          0 0 60px rgba(0, 255, 106, 0.28);
+      }
+
+      .btn-primary:active {
+        box-shadow: none;
+      }
+
+      /* Animations */
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          opacity: 0.7;
+        }
+        50% {
+          transform: scale(1.1);
+          opacity: 1;
+        }
+      }
+
+      @keyframes glitchShift {
+        0% {
+          transform: translate(0, 0);
+        }
+        25% {
+          transform: translate(-4px, 2px);
+        }
+        50% {
+          transform: translate(3px, -2px);
+        }
+        75% {
+          transform: translate(-2px, -1px);
+        }
+        100% {
+          transform: translate(2px, 1px);
+        }
+      }
+
+      @keyframes glitchOpacity {
+        0% {
+          opacity: 0;
+        }
+        40% {
+          opacity: 0.9;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes channelRed {
+        0% {
+          transform: translate(0, 0);
+          opacity: 0.85;
+        }
+        50% {
+          transform: translate(-2px, 0);
+        }
+        100% {
+          transform: translate(1px, 0);
+          opacity: 0;
+        }
+      }
+
+      @keyframes channelCyan {
+        0% {
+          transform: translate(0, 0);
+          opacity: 0.85;
+        }
+        50% {
+          transform: translate(3px, 0);
+        }
+        100% {
+          transform: translate(-1px, 0);
+          opacity: 0;
+        }
+      }
+
+      @keyframes crtFlicker {
+        0%,
+        100% {
+          opacity: 0.18;
+        }
+        50% {
+          opacity: 0.27;
+        }
+      }
+
+      .scanline-overlay {
+        animation: crtFlicker 1.4s ease-in-out infinite alternate;
+      }
+
+      @media (max-width: 640px) {
+        .wrapper {
+          padding-inline: 8px;
+        }
+
+        .terminal {
+          padding-inline: 10px;
+        }
+
+        .terminal-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+
+        .terminal-title {
+          text-align: left;
+        }
+
+        .bottom-bar {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .hidden-logs-section {
+          width: 100%;
+          justify-content: space-between;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="scanline-overlay"></div>
+    <div class="crt-vignette"></div>
+
+    <div class="wrapper">
+      <main class="terminal" id="terminal-root">
+        <header class="terminal-header">
+          <div class="terminal-lights">
+            <span class="light light--red"></span>
+            <span class="light light--yellow"></span>
+            <span class="light"></span>
+          </div>
+          <div class="terminal-title">SYSTEM LOGS</div>
+          <div class="terminal-meta">LIVE</div>
+        </header>
+
+        <section class="terminal-body">
+          <div class="logs-scroll" id="logs-scroll">
+            <pre class="logs" id="logs"></pre>
+          </div>
+
+          <div class="bottom-bar">
+            <div class="status-indicator">
+              <span class="status-dot"></span>
+              <span class="status-text">System Link: Online</span>
+            </div>
+
+            <div class="hidden-logs-section">
+              <span class="error-message" id="inline-error"></span>
+              <button type="button" class="btn-ghost" id="hidden-logs-button">
+                <span class="btn-ghost-icon"></span>
+                <span class="btn-ghost-label">Access Hidden Logs</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="username-dialog">
+      <div class="prompt-title">Hidden Log Channel Access</div>
+      <div class="prompt-body">
+        Welcome, Dr. Torvald. Please enter your username.
+      </div>
+
+      <form method="dialog" id="username-form">
+        <div class="prompt-input-row">
+          <label for="username-input" class="prompt-label">Username</label>
+          <input
+            id="username-input"
+            name="username"
+            class="prompt-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="••••••••"
+          />
+        </div>
+
+        <div class="prompt-footer">
+          <div class="prompt-error" id="dialog-error"></div>
+          <div class="prompt-actions">
+            <button type="button" class="btn-secondary" id="cancel-dialog">Cancel</button>
+            <button type="submit" class="btn-primary">Confirm</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <script>
+      (function () {
+        /**
+         * Paste your logs directly into these template strings.
+         * Each newline becomes a separate log line.
+         */
+        const MAIN_LOGS_TEXT = `[BOOT] Initializing log stream...
+[2099-04-12 03:14:02] ContainmentCore v3.7.11 initialising
+[2099-04-12 03:14:03] Field stabilisers online
+[2099-04-12 03:14:05] Subject status: DORMANT
+[2099-04-12 03:14:07] Energy draw nominal (42.1MW)
+[2099-04-12 03:14:11] Integrity check passed
+
+[2099-04-13 02:09:33] Field strength fluctuating
+[2099-04-13 02:09:35] Manual override denied
+[2099-04-13 02:09:38] ASCII stream detected: 65
+[2099-04-13 02:09:40] Source unresolved
+
+[2099-04-14 07:31:02] Field strength adjusted → 98%
+[2099-04-14 07:31:06] System temperature nominal
+[2099-04-14 07:31:09] Minor spatial aliasing observed
+[2099-04-14 07:31:12] Containment Iattice recalibrated
+
+[2099-04-15 22:06:19] Containment cycle START
+[2099-04-15 22:06:21] Subject motion detected
+[2099-04-15 22:06:21] Subject motion detected
+[2099-04-15 22:06:24] Warning: non-repeatable timestamp sequence
+[2099-04-15 22:06:27] Diagnostic flag: 01001111
+
+[2099-04-16 14:58:10] Long-term stability projection: 91%
+[2099-04-16 14:58:11] 0x50 detected in memory buffer
+[2099-04-16 14:58:12] Projection revised: 76%
+[2099-04-16 14:58:14] Projection revised: 52%
+[2099-04-16 14:58:16] Projection revised: 17%
+
+[2099-04-17 12:44:55] Automated report generated
+[2099-04-17 12:44:57] Report archived
+[2099-04-17 12:45:01] ALERT: duplicate node detected
+[2099-04-17 13:45:01] ALERT: duplicate node detected
+
+[2099-04-18 11:52:44] Routine sync with monitoring array
+[2099-04-18 11:52:45] Sensor drift detected (Δ=0.002)
+[2099-04-18 11:52:47] Drift compensated
+[2099-04-18 11:52:50] Note: checksum mismatch ignored [0x43]
+
+[2099-04-19 23:41:00] Emergency containment loop engaged
+[2099-04-19 23:41:04] Audio interference recorded
+[2099-04-19 23:41:07] Signal pattern: ... 
+[2099-04-19 23:41:11] Interpretation failed
+
+[2099-04-21 09:12:26] Log rotation incomplete
+[2099-04-21 09:12:??] Unexpected data persistence
+[2099-04-21 09:12:34] Residual marker found: 0x?5
+[20??-04-?1 ??:??:??] WARNING: system coherence degrading`;
+
+        const HIDDEN_LOGS_TEXT = `
+
+
+coherence check FAILED
+coherence check FAILED
+coherence check FAILED
+Subroutine SYNC aborted
+Buffer underrun detected (0x53)
+Y-axis drift exceeds limits
+axis lock disengaged
+Stability threshold < 0.12
+Err: typo in config → syStem
+Temporal echo detected
+Temporal echo detected
+Temporal echo detected
+Memory page fault @ ASC 84
+Eviction incomplete
+Module reference unresolved
+Hex residue: 0x45
+ContainmentCore unresponsive
+Manual reset blocked`;
+
+        const EXPECTED_USERNAME = "TheGreatTorvald"; // case-insensitive
+
+        const logsContainer = document.getElementById("logs");
+        const logsScroll = document.getElementById("logs-scroll");
+        const hiddenLogsButton = document.getElementById("hidden-logs-button");
+        const inlineError = document.getElementById("inline-error");
+        const terminalRoot = document.getElementById("terminal-root");
+
+        const dialog = document.getElementById("username-dialog");
+        const usernameForm = document.getElementById("username-form");
+        const usernameInput = document.getElementById("username-input");
+        const dialogError = document.getElementById("dialog-error");
+        const cancelDialog = document.getElementById("cancel-dialog");
+
+        let hasLoadedHiddenLogs = false;
+        let hiddenScrambleTimer = null;
+        const hiddenScrambleInFlight = new WeakMap();
+
+        function createLogLines(text, extraClass) {
+          const fragment = document.createDocumentFragment();
+          const lines = text.replace(/\\r\\n/g, "\\n").split("\\n");
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const span = document.createElement("span");
+            span.className = "log-line" + (extraClass ? " " + extraClass : "");
+            span.textContent = line;
+            if (extraClass === "log-line--hidden") {
+              span.dataset.originalText = line;
+            }
+            fragment.appendChild(span);
+            fragment.appendChild(document.createTextNode("\\n"));
+          }
+          return fragment;
+        }
+
+        function appendLogsFromText(text, extraClass) {
+          if (!text || !text.trim()) return;
+          const fragment = createLogLines(text, extraClass);
+          logsContainer.appendChild(fragment);
+          requestAnimationFrame(() => {
+            logsScroll.scrollTop = logsScroll.scrollHeight;
+          });
+        }
+
+        function showInlineError(message) {
+          inlineError.textContent = message;
+          inlineError.classList.add("error-message--visible");
+          setTimeout(() => {
+            inlineError.classList.remove("error-message--visible");
+          }, 2800);
+        }
+
+        function showDialogError(message) {
+          dialogError.textContent = message;
+          dialogError.classList.add("prompt-error--visible");
+        }
+
+        function clearDialogError() {
+          dialogError.textContent = "";
+          dialogError.classList.remove("prompt-error--visible");
+        }
+
+        function openUsernameDialog() {
+          if (typeof dialog.showModal === "function") {
+            clearDialogError();
+            dialog.showModal();
+            usernameInput.value = "";
+            setTimeout(() => {
+              usernameInput.focus();
+            }, 50);
+          } else {
+            const fallback = window.prompt(
+              "Welcome, Dr. Torvald. Please enter your username."
+            );
+            handleUsernameSubmission(fallback ?? "");
+          }
+        }
+
+        function startHiddenLogScramble() {
+          if (hiddenScrambleTimer) return;
+
+          const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+          const getHiddenLines = () =>
+            Array.from(document.querySelectorAll(".log-line--hidden"));
+
+          const randomLetter = () =>
+            alphabet[Math.floor(Math.random() * alphabet.length)];
+
+          const mutateOnce = () => {
+            const hiddenLines = getHiddenLines();
+            if (!hiddenLines.length) return;
+
+            // Try a few times to find a line that isn't currently in-flight.
+            let target = null;
+            for (let attempt = 0; attempt < 6; attempt += 1) {
+              const candidate =
+                hiddenLines[Math.floor(Math.random() * hiddenLines.length)];
+              if (!hiddenScrambleInFlight.has(candidate)) {
+                target = candidate;
+                break;
+              }
+            }
+            if (!target) return;
+
+            const original =
+              target.dataset.originalText ??
+              target.textContent ??
+              "";
+            if (!original || original.length < 2) return;
+
+            // Pick a character index that is NOT whitespace (never mutate newline, tabs, spaces, etc).
+            const mutableIndices = [];
+            for (let i = 0; i < original.length; i += 1) {
+              const ch = original[i];
+              if (!/\\s/.test(ch)) mutableIndices.push(i);
+            }
+            if (!mutableIndices.length) return;
+            const idx =
+              mutableIndices[Math.floor(Math.random() * mutableIndices.length)];
+
+            const replacement = randomLetter();
+            const mutated =
+              original.slice(0, idx) + replacement + original.slice(idx + 1);
+
+            target.textContent = mutated;
+
+            const revertDelay = randomInRange(100, 300);
+            const revertTimer = setTimeout(() => {
+              if (target && target.isConnected) {
+                target.textContent = original;
+              }
+              hiddenScrambleInFlight.delete(target);
+            }, revertDelay);
+
+            hiddenScrambleInFlight.set(target, revertTimer);
+          };
+
+          const tick = () => {
+            mutateOnce();
+            hiddenScrambleTimer = setTimeout(
+              tick,
+              Math.floor(randomInRange(80, 140))
+            );
+          };
+
+          tick();
+        }
+
+        async function handleUsernameSubmission(inputRaw) {
+          const input = (inputRaw || "").trim();
+          const isValid =
+            input.toLowerCase() === EXPECTED_USERNAME.toLowerCase();
+
+          if (!isValid) {
+            const errorMessage =
+              "Incorrect username. Please verify from other accounts.";
+            showDialogError(errorMessage);
+            showInlineError(errorMessage);
+            shakeTerminal();
+            return;
+          }
+
+          dialog.close();
+
+          if (hasLoadedHiddenLogs) return;
+          hasLoadedHiddenLogs = true;
+
+          if (hiddenLogsButton && hiddenLogsButton.parentElement) {
+            hiddenLogsButton.parentElement.removeChild(hiddenLogsButton);
+          }
+
+          appendLogsFromText(HIDDEN_LOGS_TEXT, "log-line--hidden");
+          startHiddenLogScramble();
+        }
+
+        function shakeTerminal() {
+          terminalRoot.classList.add("glitch-animate");
+          setTimeout(() => {
+            terminalRoot.classList.remove("glitch-animate");
+          }, 220);
+        }
+
+        function randomInRange(min, max) {
+          return Math.random() * (max - min) + min;
+        }
+
+        function triggerGlitch() {
+          const bounds = terminalRoot.getBoundingClientRect();
+          const shard = document.createElement("div");
+          shard.className = "glitch-shard glitch-animate";
+
+          const width = randomInRange(bounds.width * 0.2, bounds.width * 0.6);
+          const height = randomInRange(12, 40);
+          const left = randomInRange(0, bounds.width - width);
+          const top = randomInRange(0, bounds.height - height);
+
+          shard.style.width = width + "px";
+          shard.style.height = height + "px";
+          shard.style.left = left + "px";
+          shard.style.top = top + "px";
+
+          const redChannel = document.createElement("div");
+          redChannel.className = "glitch-channel glitch-channel--red";
+          const cyanChannel = document.createElement("div");
+          cyanChannel.className = "glitch-channel glitch-channel--cyan";
+          shard.appendChild(redChannel);
+          shard.appendChild(cyanChannel);
+
+          terminalRoot.appendChild(shard);
+
+          setTimeout(() => {
+            if (shard.parentElement) {
+              shard.parentElement.removeChild(shard);
+            }
+          }, 320);
+        }
+
+        function scheduleNextGlitch() {
+          const delay = randomInRange(1000, 4000);
+          setTimeout(() => {
+            triggerGlitch();
+            scheduleNextGlitch();
+          }, delay);
+        }
+
+        if (hiddenLogsButton) {
+          hiddenLogsButton.addEventListener("click", () => {
+            openUsernameDialog();
+          });
+        }
+
+        if (cancelDialog) {
+          cancelDialog.addEventListener("click", () => {
+            clearDialogError();
+            dialog.close();
+          });
+        }
+
+        if (usernameForm) {
+          usernameForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            clearDialogError();
+            handleUsernameSubmission(usernameInput.value);
+          });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+          logsContainer.textContent = "";
+          appendLogsFromText(MAIN_LOGS_TEXT, "");
+          scheduleNextGlitch();
+        });
+      })();
+    </script>
+  </body>
+</html>
