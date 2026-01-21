@@ -683,7 +683,7 @@
     <dialog id="username-dialog">
       <div class="prompt-title">Hidden Log Channel Access</div>
       <div class="prompt-body">
-        Welcome, Dr. Torvalds. Please enter your username.
+        Welcome, Dr. Torvald. Please enter your username.
       </div>
 
       <form method="dialog" id="username-form">
@@ -787,10 +787,8 @@ Hex residue: 0x45
 ContainmentCore unresponsive
 Manual reset blocked`;
 
-        const crypto = require('crypto');
-        const hash = crypto.createHash('sha256');
-
-        const EXPECTED_USERNAME = "809851cd1669bb84f42ed49a0048ac4eef478fd8655e84842570bf8e4f9bfc18"; // case-insensitive
+        const EXPECTED_USERNAME_HASH =
+          "809851cd1669bb84f42ed49a0048ac4eef478fd8655e84842570bf8e4f9bfc18";
 
         const logsContainer = document.getElementById("logs");
         const logsScroll = document.getElementById("logs-scroll");
@@ -807,6 +805,14 @@ Manual reset blocked`;
         let hasLoadedHiddenLogs = false;
         let hiddenScrambleTimer = null;
         const hiddenScrambleInFlight = new WeakMap();
+
+        async function sha256Hex(text) {
+          const encoder = new TextEncoder();
+          const data = encoder.encode(text);
+          const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+          const hashArray = Array.from(new Uint8Array(hashBuffer));
+          return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+        }
 
         function createLogLines(text, extraClass) {
           const fragment = document.createDocumentFragment();
@@ -940,10 +946,8 @@ Manual reset blocked`;
 
         async function handleUsernameSubmission(inputRaw) {
           const input = (inputRaw || "").trim();
-          hash.update(input);
-          const digest = hash.digest('hex')
-          const isValid =
-            digest === EXPECTED_USERNAME();
+          const inputHash = await sha256Hex(input);
+          const isValid = inputHash === EXPECTED_USERNAME_HASH;
 
           if (!isValid) {
             const errorMessage =
