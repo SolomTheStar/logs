@@ -735,7 +735,7 @@
 [2099-04-14 07:31:02] Field strength adjusted → 98%
 [2099-04-14 07:31:06] System temperature nominal
 [2099-04-14 07:31:09] Minor spatial aliasing observed
-[2099-04-14 07:31:12] Containment Iattice recalibrated
+[2099-04-14 07:31:12] Containment (I)attice recalibrated
 
 [2099-04-15 22:06:19] Containment cycle START
 [2099-04-15 22:06:21] Subject motion detected
@@ -752,7 +752,7 @@
 [2099-04-17 12:44:55] Automated report generated
 [2099-04-17 12:44:57] Report archived
 [2099-04-17 12:45:01] ALERT: duplicate node detected
-[2099-04-17 13:45:01] ALERT: duplicate node detected
+[2099-04-17 (13):45:01] ALERT: duplicate node detected
 
 [2099-04-18 11:52:44] Routine sync with monitoring array
 [2099-04-18 11:52:45] Sensor drift detected (Δ=0.002)
@@ -766,7 +766,7 @@
 
 [2099-04-21 09:12:26] Log rotation incomplete
 [2099-04-21 09:12:??] Unexpected data persistence
-[2099-04-21 09:12:34] Residual marker found: 0x?5
+[2099-04-21 09:12:34] Residual marker found: 0x45
 [20??-04-?1 ??:??:??] WARNING: system coherence degrading`;
 
         const HIDDEN_LOGS_TEXT = `
@@ -777,10 +777,10 @@ coherence check FAILED
 coherence check FAILED
 Subroutine SYNC aborted
 Buffer underrun detected (0x53)
-Y-axis drift exceeds limits
+(Y)-axis drift exceeds limits
 axis lock disengaged
 Stability threshold < 0.12
-Err: typo in config → syStem
+Err: typo in config → sy(S)tem
 Temporal echo detected
 Temporal echo detected
 Temporal echo detected
@@ -825,17 +825,6 @@ Manual reset blocked`;
             if (!line.trim()) continue;
             const span = document.createElement("span");
             span.className = "log-line" + (extraClass ? " " + extraClass : "");
-            
-            // Special handling for "Iattice"
-            if (line.includes("Iattice")) {
-              const processedLine = line.replace(
-                /Iattice/g,
-                '<span class="log-line-underline">Iattice</span>'
-              );
-              span.innerHTML = processedLine;
-            } else {
-              span.textContent = line;
-            }
             
             if (extraClass === "log-line--hidden") {
               span.dataset.originalText = line;
