@@ -826,6 +826,17 @@ Manual reset blocked`;
             const span = document.createElement("span");
             span.className = "log-line" + (extraClass ? " " + extraClass : "");
             
+            // Special handling for "Iattice"
+            if (line.includes("Iattice")) {
+              const processedLine = line.replace(
+                /Iattice/g,
+                '<span class="log-line-underline">Iattice</span>'
+              );
+              span.innerHTML = processedLine;
+            } else {
+              span.textContent = line;
+            }
+            
             if (extraClass === "log-line--hidden") {
               span.dataset.originalText = line;
             }
