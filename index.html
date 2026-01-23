@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-<!-- Hello! -->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -194,6 +193,10 @@
         text-shadow:
           0 0 2px rgba(255, 59, 59, 0.7),
           0 0 7px rgba(255, 59, 59, 0.45);
+      }
+
+      .log-line-underline {
+        text-decoration: underline;
       }
 
       .bottom-bar {
@@ -642,7 +645,6 @@
       }
     </style>
   </head>
-  <!-- You probably think its quite smart to inspect element this -->
   <body>
     <div class="scanline-overlay"></div>
     <div class="crt-vignette"></div>
@@ -711,9 +713,13 @@
         </div>
       </form>
     </dialog>
-    <!-- :) -->
+
     <script>
       (function () {
+        /**
+         * Paste your logs directly into these template strings.
+         * Each newline becomes a separate log line.
+         */
         const MAIN_LOGS_TEXT = `[BOOT] Initializing log stream...
 [2099-04-12 03:14:02] ContainmentCore v3.7.11 initialising
 [2099-04-12 03:14:03] Field stabilisers online
@@ -788,8 +794,6 @@ Manual reset blocked`;
         const EXPECTED_USERNAME_HASH =
           "809851cd1669bb84f42ed49a0048ac4eef478fd8655e84842570bf8e4f9bfc18";
 
-        const correct_username = "TotallyTorvalded";
-
         const logsContainer = document.getElementById("logs");
         const logsScroll = document.getElementById("logs-scroll");
         const hiddenLogsButton = document.getElementById("hidden-logs-button");
@@ -821,7 +825,18 @@ Manual reset blocked`;
             if (!line.trim()) continue;
             const span = document.createElement("span");
             span.className = "log-line" + (extraClass ? " " + extraClass : "");
-            span.textContent = line;
+            
+            // Special handling for "Iattice"
+            if (line.includes("Iattice")) {
+              const processedLine = line.replace(
+                /Iattice/g,
+                '<span class="log-line-underline">Iattice</span>'
+              );
+              span.innerHTML = processedLine;
+            } else {
+              span.textContent = line;
+            }
+            
             if (extraClass === "log-line--hidden") {
               span.dataset.originalText = line;
             }
